@@ -15,6 +15,7 @@
 #include <omp.h>
 #include <mpi.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "timer.h"
 
@@ -45,7 +46,7 @@ int main(int argc, char** argv)
   }
 
   // Setup allgather environment.
-  int size_per_processor = 1e8;
+  int size_per_processor = 1e6;
   int total_size = processors*size_per_processor;
   int *global_data = (int*) malloc(total_size*sizeof(int));
   int offset = size_per_processor*rank;
@@ -53,7 +54,8 @@ int main(int argc, char** argv)
   int i = 0;
   for(; i < size_per_processor; ++i) local_data[i] = i+offset;
 
-  // clock_t start_t = clock();
+  struct timeval overall_timer_start;
+  gettimeofday(&overall_timer_start, NULL);
 
   // Initiate the parallel region so that multiple threads can be used.
   #pragma omp parallel
@@ -69,7 +71,8 @@ int main(int argc, char** argv)
       // things inside the loop (in this case, 'task').
       #pragma omp single nowait
       {
-        tic();
+        struct timeval loop_timer_start;
+        gettimeofday(&loop_timer_start, NULL);
         for(int i = 0; i < 1; ++i)
         {
           // Our 'work'.
@@ -105,17 +108,24 @@ int main(int argc, char** argv)
             fprintf(stdout,"allgather: %f\n", timing);
           }
         }
-        double timing = toc();
-        fprintf(stdout,"loop time: %f\n", timing);
+        struct timeval loop_timer_end;
+        gettimeofday(&loop_timer_end, NULL);
+        double delta = ((loop_timer_end.tv_sec  - loop_timer_start.tv_sec) 
+          * 1000000u + loop_timer_end.tv_usec - loop_timer_start.tv_usec) 
+            / 1.e6;
+        fprintf(stdout,"loop time: %f\n", delta);
       }
     }
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // clock_t end_t = clock();
-  // double total_time = (double)(end_t - start_t) / CLOCKS_PER_SEC;
-  // fprintf(stdout,"overall: %f\n", total_time);
+  struct timeval overall_timer_end;
+  gettimeofday(&overall_timer_end, NULL);
+  double delta = ((overall_timer_end.tv_sec  - overall_timer_start.tv_sec) 
+    * 1000000u + overall_timer_end.tv_usec - overall_timer_start.tv_usec) 
+      / 1.e6;
+  fprintf(stdout,"overall: %f\n", delta);
 
   free(global_data);
   MPI_Finalize();
