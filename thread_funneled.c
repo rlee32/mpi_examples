@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <omp.h>
 #include <mpi.h>
-#include <time.h>
 #include <sys/time.h>
 
 // Here we execute a for loop, where we want data associated with each loop
@@ -29,7 +28,8 @@ int main(int argc, char** argv)
 {
   // Initialize MPI threads and check provided support levels.
   int provided_support = -1;
-  MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided_support);
+  // MPI_Init(&argc, &argv);
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided_support);
   int processors = -1;
   MPI_Comm_size(MPI_COMM_WORLD, &processors);
   int rank = -1;
@@ -52,7 +52,7 @@ int main(int argc, char** argv)
   }
 
   // Setup allgather environment.
-  int size_per_processor = 1e6;
+  int size_per_processor = 5e7;
   int total_size = processors*size_per_processor;
   int *global_data = (int*) malloc(total_size*sizeof(int));
   int offset = size_per_processor*rank;
@@ -79,7 +79,9 @@ int main(int argc, char** argv)
       {
         struct timeval loop_timer_start;
         gettimeofday(&loop_timer_start, NULL);
-        for(int i = 0; i < 1; ++i)
+        // struct timeval loop_timer_start;
+        // gettimeofday(&loop_timer_start, NULL);
+        for(int i = 0; i < 3; ++i)
         {
           // Our 'work'.
           sleep(1);
