@@ -17,8 +17,6 @@
 #include <time.h>
 #include <sys/time.h>
 
-#include "timer.h"
-
 // Here we execute a for loop, where we want data associated with each loop
 // to be transmitted by an MPI process, but we are able to process the entire 
 // for loop all at once. So, instead of waiting on the blocking MPI call at the 
@@ -43,6 +41,14 @@ int main(int argc, char** argv)
       MPI_THREAD_FUNNELED, MPI_THREAD_SERIALIZED, MPI_THREAD_MULTIPLE);
     fprintf(stdout, "Requested, provided support: %d, %d\n", 
       MPI_THREAD_FUNNELED, provided_support);
+  }
+
+  // Test to see if each MPI process has its own master thread 
+  // (even if we are using only one multicore cpu)
+  if(omp_get_thread_num() == 0) 
+  {
+    fprintf(stdout, "Master thread %d, reporting from rank %d\n", 
+      omp_get_thread_num(), rank);
   }
 
   // Setup allgather environment.
@@ -94,7 +100,8 @@ int main(int argc, char** argv)
             // sleep(1);
             fprintf(stdout, "MPI call %d, thread: %d, rank %d\n", i, 
               omp_get_thread_num(), rank);
-            tic();
+            struct timeval allgather_timer_start;
+            gettimeofday(&allgather_timer_start, NULL);
             MPI_Allgather(
               local_data, 
               size_per_processor, 
@@ -104,8 +111,13 @@ int main(int argc, char** argv)
               MPI_INT, 
               MPI_COMM_WORLD
             );
-            double timing = toc();
-            fprintf(stdout,"allgather: %f\n", timing);
+            struct timeval allgather_timer_end;
+            gettimeofday(&allgather_timer_end, NULL);
+            double delta = ((allgather_timer_end.tv_sec 
+              - allgather_timer_start.tv_sec) * 1000000u 
+              + allgather_timer_end.tv_usec - allgather_timer_start.tv_usec) 
+                / 1.e6;
+            fprintf(stdout, "allgather: %f\n", delta);
           }
         }
         struct timeval loop_timer_end;

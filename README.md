@@ -1,7 +1,7 @@
 This repository contains use cases and examples of MPI.
 
 # Compilation
-mpicc -fopenmp <source_file>
+mpicc -fopenmp -std=gnu99 <source_files>
 
 # Source File Dscriptions
 mpi_thread_funneled.c: Here we overlap computation and communication using 
