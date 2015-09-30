@@ -1,15 +1,12 @@
 // Author: Robert H. Lee
 // Created: Fall 2015
-// Here we test allgather to fill only part of the blocks corresponding to each 
+// Here we use allgatherv to fill only part of the blocks corresponding to each 
 // process. This is useful when we want to overlap computation and 
 // communication. If computation is required to produce the block of data that 
 // needs to be allgathered, we can compute a small part of the block, then 
-// initiate allgather on the small part, then continue computation and 
-// allgathering successive chunks. The allgather and computation can be 
+// initiate allgatherv on the small part, then continue computation and 
+// allgathering successive chunks. The allgatherv and computation can be 
 // performed in parallel by the use of threads.
-
-// Turns out, if received_count and send_count are different for any processor,
-// the processor will hang, unless all send_counts are zero.
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -37,7 +34,9 @@ int main(int argc, char** argv)
   }
 
   // Setup allgather environment.
-  int size_per_processor = 5;
+  int steps = 3;
+  int size_per_step = 5;
+  int size_per_processor = size_per_step * steps;
   int total_size = processors*size_per_processor;
   int *global_data = (int*) malloc(total_size*sizeof(int));
   int i = 0;
@@ -46,18 +45,36 @@ int main(int argc, char** argv)
   int *local_data = global_data + offset;
   for(i = 0; i < size_per_processor; ++i) local_data[i] = i+offset;
   
+  // Compute displs and recvcounts.
+  int* displs = (int*) malloc(processors*sizeof(int));
+  int* recvcounts = (int*) malloc(processors*sizeof(int));
+  for(i = 0; i < processors; ++i)
+  {
+    displs[i] = i * size_per_processor;
+    recvcounts[i] = size_per_step;
+  }
+
   // If the send size differs, allgather hangs.
-  int block = (rank & 1) ? 0: size_per_processor;
-  fprintf(stdout, "Rank: %d, send count: %d\n", rank, block);
-  MPI_Allgather(
-    local_data, 
-    block, 
-    MPI_INT, 
-    global_data, 
-    size_per_processor, 
-    MPI_INT, 
-    MPI_COMM_WORLD
-  );
+  for(i = 0; i < steps; ++i)
+  {
+    int block = size_per_step;//(rank & 1) ? 0: size_per_step;
+    fprintf(stdout, "Rank: %d, send count: %d\n", rank, block);
+    MPI_Allgatherv(
+      local_data, 
+      block, 
+      MPI_INT, 
+      global_data, 
+      recvcounts, // replaces recvcount
+      displs, // addition for allgatherv
+      MPI_INT, 
+      MPI_COMM_WORLD
+    );
+    // update locations
+    local_data += size_per_step;
+    int j;
+    for(j = 0; j < processors; ++j) displs[j] += size_per_step;
+  }
+
 
   // Print list.
   fprintf(stdout, "Rank %d:\n", rank);
@@ -67,7 +84,10 @@ int main(int argc, char** argv)
   }
   fprintf(stdout, "\n");
 
+  // Clean up.
   free(global_data);
+  free(displs);
+  free(recvcounts);
 
   MPI_Finalize();
 
